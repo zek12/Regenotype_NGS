@@ -46,5 +46,4 @@ rule flagstats:
 
 
 
-# rule bgzip_tabix_cram: ???
 
