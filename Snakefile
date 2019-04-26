@@ -1,5 +1,15 @@
 configfile: "config.yaml"
 
+from os.path import basename
+
+# rule regenerate_fastqs:
+# 	input:
+# 		"{sample}.bam"
+# 	output:
+# 		fq1="{sample}.R1.fq",
+# 		fq2="{sample}.R2.fq"
+# 	shell:
+# 		"samtools fastq -1 {output.fq1} -2 {output.fq2} {input}"
 
 rule regenerate_fastqs:
 	input:
@@ -7,16 +17,16 @@ rule regenerate_fastqs:
 	output:
 		fq1="{sample}.R1.fq",
 		fq2="{sample}.R2.fq"
+	params:
+		filename=lambda wildcards: basename(wildcards.sample)
 	shell:
-		"samtools fastq -1 {output.fq1} -2 {output.fq2} {input}"
-
+		"samtools fastq -1 {params.filename}.R1.fq -2 {params.filename}.R2.fq {input}"
 
 rule realign:
 	input:
 		fq1="{sample}.R1.fq",
 		fq2="{sample}.R2.fq",
 		ref=config["ref_fa"]
-		# ref=REF
 	output:
 		sam="{sample}.realigned.sam"
 	shell:
