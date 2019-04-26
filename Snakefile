@@ -1,6 +1,7 @@
 configfile: "config.yaml"
 
 
+
 rule regenerate_fastqs:
 	input:
 		"{sample}.bam"
