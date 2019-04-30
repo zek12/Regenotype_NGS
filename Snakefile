@@ -1,55 +1,65 @@
 configfile: "config.yaml"
 
-from os.path import basename
+from os.path import *
 
-# rule regenerate_fastqs:
-# 	input:
-# 		"{sample}.bam"
-# 	output:
-# 		fq1="{sample}.R1.fq",
-# 		fq2="{sample}.R2.fq"
-# 	shell:
-# 		"samtools fastq -1 {output.fq1} -2 {output.fq2} {input}"
-
-rule regenerate_fastqs:
+rule all:
 	input:
-		"{sample}.bam"
+		[
+		"DRG_037/DRG_037-F01/realigned_bams/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dm.RA.recal.flagstat_sam",
+		"DRG_037/DRG_037-F01/realigned_bams/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dm.RA.recal.flagstat_cram"
+		]
+
+
+
+# rule samtools_sort:
+# 	input: config["root_dir"] + "/{run}/{sample}/{basename}.bam"
+# 	output: "{run}/{sample}/bams_pre/{basename}.sorted.bam"
+# 	shell: "samtools sort -o {output} -n {input}"
+
+
+# rule samtools_fixmate:
+# 	input: "{run}/{sample}/bams_pre/{basename}.sorted.bam"
+# 	output: "{run}/{sample}/bams_pre/{basename}.fixed_mate.bam"
+# 	shell: "samtools fixmate {input} {output}"
+
+# another option to the following step is samtools collate + samtools fastq
+rule picard_SamToFastq:
+	input: config["root_dir"] + "/{run}/{sample}/{basename}.bam"
 	output:
-		fq1="{sample}.R1.fq",
-		fq2="{sample}.R2.fq"
-	params:
-		filename=lambda wildcards: basename(wildcards.sample)
-	shell:
-		"samtools fastq -1 {params.filename}.R1.fq -2 {params.filename}.R2.fq {input}"
+		fq1="{run}/{sample}/regenerated_fastqs/{basename}.R1.fq.gz",
+		fq2="{run}/{sample}/regenerated_fastqs/{basename}.R2.fq.gz",
+		fq0="{run}/{sample}/regenerated_fastqs/{basename}.unpaired.fq.gz"
+	shell: "java -Xmx2g -jar " + config["path_picard"] + " SamToFastq I={input} FASTQ={output.fq1} SECOND_END_FASTQ={output.fq2} UNPAIRED_FASTQ={output.fq0} VALIDATION_STRINGENCY=LENIENT"
+
 
 rule realign:
 	input:
-		fq1="{sample}.R1.fq",
-		fq2="{sample}.R2.fq",
+		fq1="{run}/{sample}/regenerated_fastqs/{basename}.R1.fq.gz",
+		fq2="{run}/{sample}/regenerated_fastqs/{basename}.R2.fq.gz",
 		ref=config["ref_fa"]
 	output:
-		sam="{sample}.realigned.sam"
+		"{run}/{sample}/realigned_bams/{basename}.realigned.sam"
 	shell:
-		"bwa mem {input.ref} {input.fq1} {input.fq2} > {output.sam}"
+		"bwa mem {input.ref} {input.fq1} {input.fq2} > {output}"
 
 
 rule cram:
 	input:
-		sam="{sample}.realigned.sam",
+		sam="{run}/{sample}/realigned_bams/{basename}.realigned.sam",
 		ref=config["ref_fa"]
 	output:
-		"{sample}.realigned.cram"
+		"{run}/{sample}/realigned_bams/{basename}.realigned.cram"
 	shell:
 		config["path_to_scramble"] + " -I sam -O cram -7 -V 3.0 -t 32 -B -r {input.ref} {input.sam} {output}"
 
 
 rule flagstats:
 	input:
-		sam="{sample}.realigned.sam",
-		cram="{sample}.realigned.cram"
+		sam="{run}/{sample}/realigned_bams/{basename}.realigned.sam",
+		cram="{run}/{sample}/realigned_bams/{basename}.realigned.cram"
 	output:
-		flagstat_sam="{sample}.flagstat_sam.txt",
-		flagstat_cram="{sample}.flagstat_cram.txt"
+		flagstat_sam="{run}/{sample}/realigned_bams/{basename}.flagstat_sam",
+		flagstat_cram="{run}/{sample}/realigned_bams/{basename}.flagstat_cram"
 	shell:
 		"samtools flagstat {input.sam} > {output.flagstat_sam} && "
 		"samtools flagstat {input.cram} > {output.flagstat_cram}"
