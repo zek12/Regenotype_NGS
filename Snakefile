@@ -5,22 +5,23 @@ from os.path import *
 rule all:
 	input:
 		[
-		"DRG_037/DRG_037-F01/realigned_bams/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dm.RA.recal.flagstat_sam",
-		"DRG_037/DRG_037-F01/realigned_bams/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dm.RA.recal.flagstat_cram"
+		"DRG_037/DRG_037-F01/realigned_bams/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.flagstat_cram"
 		]
 
 
 
-# rule samtools_sort:
+# rule sort_bam:
 # 	input: config["root_dir"] + "/{run}/{sample}/{basename}.bam"
 # 	output: "{run}/{sample}/bams_pre/{basename}.sorted.bam"
-# 	shell: "samtools sort -o {output} -n {input}"
+# 	# shell: "samtools sort -o {output} -n {input}"
+# 	shell: "java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=queryname I={input} O={output}"
 
-
-# rule samtools_fixmate:
+# rule fixmate:
 # 	input: "{run}/{sample}/bams_pre/{basename}.sorted.bam"
 # 	output: "{run}/{sample}/bams_pre/{basename}.fixed_mate.bam"
-# 	shell: "samtools fixmate {input} {output}"
+# 	# shell: "samtools fixmate {input} {output}"
+# 	shell: "java -Xmx2g -jar " + config["path_picard"] + " FixMateInformation I={input} O={output}"
+
 
 # another option to the following step is samtools collate + samtools fastq
 rule picard_SamToFastq:
@@ -29,7 +30,7 @@ rule picard_SamToFastq:
 		fq1="{run}/{sample}/regenerated_fastqs/{basename}.R1.fq.gz",
 		fq2="{run}/{sample}/regenerated_fastqs/{basename}.R2.fq.gz",
 		fq0="{run}/{sample}/regenerated_fastqs/{basename}.unpaired.fq.gz"
-	shell: "java -Xmx2g -jar " + config["path_picard"] + " SamToFastq I={input} FASTQ={output.fq1} SECOND_END_FASTQ={output.fq2} UNPAIRED_FASTQ={output.fq0} VALIDATION_STRINGENCY=LENIENT"
+	shell: "java -Xmx2g -jar " + config["path_picard"] + " SamToFastq I={input} FASTQ={output.fq1} SECOND_END_FASTQ={output.fq2} UNPAIRED_FASTQ={output.fq0}"
 
 
 rule realign:
