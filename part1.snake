@@ -13,8 +13,8 @@ for f in FILES:
 rule all:
 	input:
 		[
-			# config["dest_dir_FASTQs"] + s + ".R1.fq.gz" for s in d.keys()
-			config["dest_dir_BAMs"] + s + ".flagstat_original_bam" for s in d.keys()
+			# config["dest_dir_BAMs"] + s + ".sorted.md.bam" for s in d.keys()
+			config["dest_dir_BAMs"] + s + ".validate_output" for s in d.keys()
 		]
 
 
@@ -79,6 +79,39 @@ rule flagstats:
 		"samtools flagstat {input.original_bam} > {output.flagstat_original_bam} "
 
 
+rule sort_bam:
+	input: config["dest_dir_BAMs"] + "{sample}.sam"
+	output: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
+	shell: "java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=coordinate I={input} O={output}"
+
+
+rule mark_duplicates:
+	input: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
+	output:
+		new_bam = config["dest_dir_BAMs"] + "{sample}.sorted.md.bam",
+		metrics = config["dest_dir_BAMs"] + "{sample}.duplicate_metrics.txt"
+	shell:
+		"java -Xmx2g -jar " + config["path_picard"] + " MarkDuplicates "
+		"I={input} "
+		"O={output.new_bam} "
+		"M={output.metrics} "
+		"VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=false"
+
+
+# collect multiple metrics, verifyBamID...
+
+# compare the flagstats of the original bam vs new bam
+# check the metrics and add the sample to a exclude.txt file
+# open fastqs with FastQC
+
+rule ValidateSamFile:
+	input: config["dest_dir_BAMs"] + "{sample}.sorted.md.bam"
+	output: config["dest_dir_BAMs"] + "{sample}.validate_output"
+	shell: "java -Xmx2g -jar " + config["path_picard"] + " ValidateSamFile I={input} MODE=SUMMARY"
+
+
+
+# snakemake -s part1.snake -npF
 
 
 
