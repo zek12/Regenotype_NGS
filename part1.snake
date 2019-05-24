@@ -3,7 +3,6 @@ configfile: "config.yaml"
 from os.path import *
 import glob
 
-
 FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
 
 d = {}
@@ -87,7 +86,6 @@ rule flagstats:
 		flagstat_sam = config["dest_dir_metrics"] + "{sample}.flagstat_sam",
 		flagstat_cram = config["dest_dir_metrics"] + "{sample}.flagstat_cram",
 		flagstat_original_bam = config["dest_dir_metrics"] + "{sample}.flagstat_original_bam"
-	priority: -1
 	shell:
 		"samtools flagstat {input.sam} > {output.flagstat_sam} && "
 		"samtools flagstat {input.cram} > {output.flagstat_cram} && "
@@ -97,7 +95,6 @@ rule flagstats:
 rule sort_bam:
 	input: config["dest_dir_BAMs"] + "{sample}.sam"
 	output: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
-	priority: 1
 	shell: "java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=coordinate I={input} O={output}"
 
 
@@ -126,11 +123,18 @@ rule cleanSam:
 		"R={input.ref}"
 
 
-rule ValidateSamFile:
+rule bam_index:
 	input: config["dest_dir_BAMs"] + "{sample}.clean.bam"
-	output: config["dest_dir_metrics"] + "{sample}.validate_output"
-	shell: "java -Xmx2g -jar " + config["path_picard"] + " ValidateSamFile I={input} MODE=SUMMARY > {output} "
+	output: config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
+	shell: "samtools index {input}"
 
+
+rule ValidateSamFile:
+	input:
+		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
+		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
+	output: config["dest_dir_metrics"] + "{sample}.validate_output"
+	shell: "java -Xmx2g -jar " + config["path_picard"] + " ValidateSamFile I={input.bam} MODE=SUMMARY O={output} "
 
 
 # collect multiple metrics, verifyBamID...
@@ -138,12 +142,13 @@ rule verifyBamID:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		vcf = config["vcf_ref_verifyBamID"]
-	output: config["dest_dir_metrics"] + "{sample}.verifyBamID.selfSM"
+	output:
+		config["dest_dir_metrics"] + "{sample}.verifyBamID.selfSM"
 	shell:
 		"verifyBamID "
 		"--vcf {input.vcf} "
 		"--bam {input.bam} "
-		"--out {output} "
+		"--out " + config["dest_dir_metrics"] + "{wildcards.sample}.verifyBamID "
 		"--ignoreRG --verbose"
 
 
@@ -164,10 +169,11 @@ rule CollectMultipleMetrics:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		ref = config["ref_fa"]
-	output: config["dest_dir_metrics"] + "{sample}.multiple_metrics.alignment_summary_metrics"
+	output:
+		config["dest_dir_metrics"] + "{sample}.multiple_metrics.alignment_summary_metrics"
 	shell:
 		"java -Xmx12g -jar " + config["path_picard"] + " CollectMultipleMetrics "
-		"R={input.ref} I={input.bam} O={output} "
+		"R={input.ref} I={input.bam} O=" + config["dest_dir_metrics"] + "{wildcards.sample}.multiple_metrics "
 		"PROGRAM=null "
 		"PROGRAM=CollectAlignmentSummaryMetrics "
 		"PROGRAM=CollectInsertSizeMetrics "

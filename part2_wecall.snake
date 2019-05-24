@@ -16,10 +16,7 @@ rule all:
 			config["dest_dir_VCFs"] + s + ".wecall.vcf" for s in d.keys()
 		]
 
-rule bam_index:
-	input: config["dest_dir_BAMs"] + "{sample}.clean.bam"
-	output: config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
-	shell: "samtools index {input}"
+
 
 rule wecall:
 	input:
