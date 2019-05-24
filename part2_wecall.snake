@@ -17,14 +17,14 @@ rule all:
 		]
 
 rule bam_index:
-	input: config["dest_dir_BAMs"] + "{sample}.sorted.md.bam"
-	output: config["dest_dir_BAMs"] + "{sample}.sorted.md.bam.bai"
+	input: config["dest_dir_BAMs"] + "{sample}.clean.bam"
+	output: config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
 	shell: "samtools index {input}"
 
 rule wecall:
 	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.sorted.md.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.sorted.md.bam.bai",
+		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
+		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
 		ref = config["ref_fa"]
 	output: config["dest_dir_VCFs"] + "{sample}.wecall.vcf"
 	shell:

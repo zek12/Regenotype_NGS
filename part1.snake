@@ -15,14 +15,21 @@ rule all:
 		[
 			# config["dest_dir_BAMs"] + s + ".md.bam" for s in d.keys()
 			# config["dest_dir_BAMs"] + s + ".clean.bam" for s in d.keys()
+			config["dest_dir_metrics"] + s + ".flagstat_cram" for s in d.keys()
+			
+		] + [
 			config["dest_dir_metrics"] + s + ".validate_output" for s in d.keys()
+			
+		] + [
+			config["dest_dir_metrics"] + s + ".verifyBamID.selfSM" for s in d.keys()
+			
 		] + [
 			config["dest_dir_metrics"] + s + ".wgs_metrics.txt" for s in d.keys()
+			
 		] + [
-			config["dest_dir_metrics"] + s + ".multiple_metrics" for s in d.keys()
-		] + [
-			config["dest_dir_BAMs"] + s + ".cram" for s in d.keys()
+			config["dest_dir_metrics"] + s + ".multiple_metrics.alignment_summary_metrics" for s in d.keys()
 		]
+
 
 
 
@@ -71,10 +78,26 @@ rule cram:
 		config["path_to_scramble"] + " -I sam -O cram -7 -V 3.0 -t 32 -B -r {input.ref} {input.sam} {output}"
 
 
+rule flagstats:
+	input:
+		sam = config["dest_dir_BAMs"] + "{sample}.sam",
+		cram = config["dest_dir_BAMs"] + "{sample}.cram",
+		original_bam = lambda wildcards: d[wildcards.sample]
+	output:
+		flagstat_sam = config["dest_dir_metrics"] + "{sample}.flagstat_sam",
+		flagstat_cram = config["dest_dir_metrics"] + "{sample}.flagstat_cram",
+		flagstat_original_bam = config["dest_dir_metrics"] + "{sample}.flagstat_original_bam"
+	priority: -1
+	shell:
+		"samtools flagstat {input.sam} > {output.flagstat_sam} && "
+		"samtools flagstat {input.cram} > {output.flagstat_cram} && "
+		"samtools flagstat {input.original_bam} > {output.flagstat_original_bam} "
+
 
 rule sort_bam:
 	input: config["dest_dir_BAMs"] + "{sample}.sam"
 	output: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
+	priority: 1
 	shell: "java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=coordinate I={input} O={output}"
 
 
@@ -115,7 +138,7 @@ rule verifyBamID:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		vcf = config["vcf_ref_verifyBamID"]
-	output: config["dest_dir_metrics"] + "{sample}.verifyBamID"
+	output: config["dest_dir_metrics"] + "{sample}.verifyBamID.selfSM"
 	shell:
 		"verifyBamID "
 		"--vcf {input.vcf} "
@@ -141,11 +164,11 @@ rule CollectMultipleMetrics:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		ref = config["ref_fa"]
-	output: config["dest_dir_metrics"] + "{sample}.multiple_metrics"
+	output: config["dest_dir_metrics"] + "{sample}.multiple_metrics.alignment_summary_metrics"
 	shell:
-		"java -Xmx12g -jar " + config["path_picard"] + " CollectMultipleMetrics"
+		"java -Xmx12g -jar " + config["path_picard"] + " CollectMultipleMetrics "
 		"R={input.ref} I={input.bam} O={output} "
-		"PROGRAM=null"
+		"PROGRAM=null "
 		"PROGRAM=CollectAlignmentSummaryMetrics "
 		"PROGRAM=CollectInsertSizeMetrics "
 		"PROGRAM=CollectGcBiasMetrics "
@@ -155,20 +178,6 @@ rule CollectMultipleMetrics:
 		"VALIDATION_STRINGENCY=SILENT "
 
 
-
-rule flagstats:
-	input:
-		sam = config["dest_dir_BAMs"] + "{sample}.sam",
-		cram = config["dest_dir_BAMs"] + "{sample}.cram",
-		original_bam = lambda wildcards: d[wildcards.sample]
-	output:
-		flagstat_sam = config["dest_dir_BAMs"] + "{sample}.flagstat_sam",
-		flagstat_cram = config["dest_dir_BAMs"] + "{sample}.flagstat_cram",
-		flagstat_original_bam = config["dest_dir_BAMs"] + "{sample}.flagstat_original_bam"
-	shell:
-		"samtools flagstat {input.sam} > {output.flagstat_sam} && "
-		"samtools flagstat {input.cram} > {output.flagstat_cram} && "
-		"samtools flagstat {input.original_bam} > {output.flagstat_original_bam} "
 
 
 # compare the flagstats of the original bam vs new bam
