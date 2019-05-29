@@ -4,6 +4,8 @@ from os.path import *
 import glob
 
 FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
+# FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037*.dupes_marked.bam", recursive = True)
+
 
 d = {}
 for f in FILES:
@@ -12,23 +14,19 @@ for f in FILES:
 rule all:
 	input:
 		[
-			# config["dest_dir_BAMs"] + s + ".md.bam" for s in d.keys()
-			# config["dest_dir_BAMs"] + s + ".clean.bam" for s in d.keys()
 			config["dest_dir_metrics"] + s + ".flagstat_cram" for s in d.keys()
-			
-		] + [
-			config["dest_dir_metrics"] + s + ".validate_output" for s in d.keys()
-			
 		] + [
 			config["dest_dir_metrics"] + s + ".verifyBamID.selfSM" for s in d.keys()
-			
 		] + [
 			config["dest_dir_metrics"] + s + ".wgs_metrics.txt" for s in d.keys()
-			
 		] + [
 			config["dest_dir_metrics"] + s + ".multiple_metrics.alignment_summary_metrics" for s in d.keys()
+		] + [
+			config["dest_dir_BAMs"] + s + ".clean.bam.bai" for s in d.keys()
 		]
-
+		# + [
+		# 	config["dest_dir_metrics"] + s + ".validate_output" for s in d.keys()
+		# ]
 
 
 
@@ -49,6 +47,10 @@ rule all:
 rule picard_SamToFastq:
 	input:
 		lambda wildcards: d[wildcards.sample]
+	log:
+		config["path_logs"] + "{sample}.SamToFastq.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.SamToFastq.benchmark.txt"
 	output:
 		fq1 = config["dest_dir_FASTQs"] + "{sample}.R1.fq.gz",
 		fq2 = config["dest_dir_FASTQs"] + "{sample}.R2.fq.gz",
@@ -61,6 +63,10 @@ rule realign:
 		fq1 = config["dest_dir_FASTQs"] + "{sample}.R1.fq.gz",
 		fq2 = config["dest_dir_FASTQs"] + "{sample}.R2.fq.gz",
 		ref = config["ref_fa"]
+	log:
+		config["path_logs"] + "{sample}.bwa.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.bwa.benchmark.txt"
 	output:
 		config["dest_dir_BAMs"] + "{sample}.sam"
 	shell:
@@ -71,6 +77,10 @@ rule cram:
 	input:
 		sam = config["dest_dir_BAMs"] + "{sample}.sam",
 		ref = config["ref_fa"]
+	log:
+		config["path_logs"] + "{sample}.cram.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.cram.benchmark.txt"
 	output:
 		config["dest_dir_BAMs"] + "{sample}.cram"
 	shell:
@@ -82,6 +92,10 @@ rule flagstats:
 		sam = config["dest_dir_BAMs"] + "{sample}.sam",
 		cram = config["dest_dir_BAMs"] + "{sample}.cram",
 		original_bam = lambda wildcards: d[wildcards.sample]
+	log:
+		config["path_logs"] + "{sample}.flagstat.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.flagstat.benchmark.txt"
 	output:
 		flagstat_sam = config["dest_dir_metrics"] + "{sample}.flagstat_sam",
 		flagstat_cram = config["dest_dir_metrics"] + "{sample}.flagstat_cram",
@@ -94,12 +108,20 @@ rule flagstats:
 
 rule sort_bam:
 	input: config["dest_dir_BAMs"] + "{sample}.sam"
+	log:
+		config["path_logs"] + "{sample}.sort_sam.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.sort_sam.benchmark.txt"
 	output: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
 	shell: "java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=coordinate I={input} O={output}"
 
 
 rule mark_duplicates:
 	input: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
+	log:
+		config["path_logs"] + "{sample}.mark_duplicates.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.mark_duplicates.benchmark.txt"
 	output:
 		bam = config["dest_dir_BAMs"] + "{sample}.md.bam",
 		metrics = config["dest_dir_metrics"] + "{sample}.duplicate_metrics.txt"
@@ -115,6 +137,10 @@ rule cleanSam:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.md.bam",
 		ref = config["ref_fa"]
+	log:
+		config["path_logs"] + "{sample}.CleanSam.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.CleanSam.benchmark.txt"
 	output: config["dest_dir_BAMs"] + "{sample}.clean.bam"
 	shell:
 		"java -Xmx2g -jar " + config["path_picard"] + " CleanSam "
@@ -125,16 +151,26 @@ rule cleanSam:
 
 rule bam_index:
 	input: config["dest_dir_BAMs"] + "{sample}.clean.bam"
+	log:
+		config["path_logs"] + "{sample}.bam_index.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.bam_index.benchmark.txt"
 	output: config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
 	shell: "samtools index {input}"
 
 
-rule ValidateSamFile:
-	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
-	output: config["dest_dir_metrics"] + "{sample}.validate_output"
-	shell: "java -Xmx2g -jar " + config["path_picard"] + " ValidateSamFile I={input.bam} MODE=SUMMARY O={output} "
+# rule ValidateSamFile:
+# 	input:
+# 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
+# 		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
+# 	log:
+# 		config["path_logs"] + "{sample}.ValidateSamFile.log"
+# 	benchmark:
+# 		config["path_benchmark"] + "{sample}.ValidateSamFile.benchmark.txt"
+# 	output: config["dest_dir_metrics"] + "{sample}.validate_output"
+# 	shell:
+# 		"java -Xmx2g -jar " + config["path_picard"] + " ValidateSamFile "
+# 		"I={input.bam} MODE=SUMMARY O={output} "
 
 
 # collect multiple metrics, verifyBamID...
@@ -142,6 +178,10 @@ rule verifyBamID:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		vcf = config["vcf_ref_verifyBamID"]
+	log:
+		config["path_logs"] + "{sample}.verifyBamID.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.verifyBamID.benchmark.txt"
 	output:
 		config["dest_dir_metrics"] + "{sample}.verifyBamID.selfSM"
 	shell:
@@ -153,15 +193,36 @@ rule verifyBamID:
 
 
 
-# IMPORTANT!! in WES we must use Picard CollectHsMetrics instead
-rule CollectWgsMetrics:
-	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		ref = config["ref_fa"]
-	output: config["dest_dir_metrics"] + "{sample}.wgs_metrics.txt"
-	shell:
-		"java -Xmx12g -jar " + config["path_picard"] + " CollectWgsMetrics "
-		"R={input.ref} I={input.bam} O={output}"
+# IMPORTANT!! in WES or targeted sequencing we must use Picard CollectHsMetrics instead
+# rule CollectHsMetrics:
+# 	input:
+# 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
+# 		ref = config["ref_fa"],
+# 		bait_intervals = config["path_bait_intervals"],
+# 		target_intervals = config["path_target_intervals"]
+# 	log:
+# 		config["path_logs"] + "{sample}.CollectHsMetrics.log"
+# 	benchmark:
+# 		config["path_benchmark"] + "{sample}.CollectHsMetrics.benchmark.txt"
+# 	output: config["dest_dir_metrics"] + "{sample}.hs_metrics.txt"
+# 	shell:
+# 		"java -Xmx12g -jar " + config["path_picard"] + " CollectHsMetrics "
+# 		"R={input.ref} I={input.bam} O={output} "
+# 		"BAIT_INTERVALS={input.bait_intervals} TARGET_INTERVALS={input.target_intervals} "
+
+
+# rule CollectWgsMetrics:
+# 	input:
+# 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
+# 		ref = config["ref_fa"]
+# 	log:
+# 		config["path_logs"] + "{sample}.CollectWgsMetrics.log"
+# 	benchmark:
+# 		config["path_benchmark"] + "{sample}.CollectWgsMetrics.benchmark.txt"
+# 	output: config["dest_dir_metrics"] + "{sample}.wgs_metrics.txt"
+# 	shell:
+# 		"java -Xmx12g -jar " + config["path_picard"] + " CollectWgsMetrics "
+# 		"R={input.ref} I={input.bam} O={output}"
 
 
 
@@ -169,6 +230,10 @@ rule CollectMultipleMetrics:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		ref = config["ref_fa"]
+	log:
+		config["path_logs"] + "{sample}.CollectMultipleMetrics.log"
+	benchmark:
+		config["path_benchmark"] + "{sample}.CollectMultipleMetrics.benchmark.txt"
 	output:
 		config["dest_dir_metrics"] + "{sample}.multiple_metrics.alignment_summary_metrics"
 	shell:
@@ -190,7 +255,7 @@ rule CollectMultipleMetrics:
 # check the metrics and add the sample to a exclude.txt file
 # open fastqs with FastQC > possibly remove adapters with cutadapt.
 
-# snakemake -s part1.snake -npF
+# snakemake -s part1.snake -np --cluster bsub --jobs 10
 
 
 
