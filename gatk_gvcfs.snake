@@ -64,10 +64,10 @@ rule HaplotypeCaller:
 	shell:
 		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' HaplotypeCaller -R {input.ref} "
 		"-I {input.bam} "
-		"--emitRefConfidence GVCF "
+		"-ERC GVCF "
 		"--dbsnp " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
 		"-O {output} "
-		"-pairHMM VECTOR_LOGLESS_CACHING "
+#"-pairHMM LOGLESS_CACHING "
 
 rule ValidateVariants:
 	input:
@@ -80,7 +80,7 @@ rule ValidateVariants:
 	shell:
 		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' ValidateVariants -R {input.ref} "
 		"-V {input.gvcf} "
-		"--validationTypeToExclude ALL > {output} "
+		"--validation-type-to-exclude ALL > {output} "
 
 
 
