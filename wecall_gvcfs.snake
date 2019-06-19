@@ -1,0 +1,39 @@
+configfile: "config.yaml"
+
+from os.path import *
+import glob
+
+
+FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
+
+d = {}
+for f in FILES:
+	d[basename(f)[:-4]] = f
+
+rule all:
+	input:
+		[
+			config["dest_dir_VCFs"] + s + ".wecall.g.vcf" for s in d.keys()
+		]
+
+
+
+rule wecall:
+	input:
+		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
+		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
+		ref = config["ref_fa"]
+	benchmark:
+		config["path_benchmark"] + "{sample}.wecall.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "{sample}.wecall.g.vcf"
+	shell:
+		"weCall --inputs {input.bam} --refFile {input.ref} --output {output} --outputRefCalls=1"
+
+
+	
+
+
+# snakemake -s wecall_gvcfs.snake -npF
+
+

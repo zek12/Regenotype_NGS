@@ -23,11 +23,15 @@ rule wecall:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
 		ref = config["ref_fa"]
-	output: config["dest_dir_VCFs"] + "{sample}.wecall.vcf"
+	benchmark:
+		config["path_benchmark"] + "{sample}.wecall.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "{sample}.wecall.vcf"
 	shell:
-		"weCall --inputs {input.bam} --refFile {input.ref} --output {output}"
+		"weCall --inputs {input.bam} --refFile {input.ref} --output {output} --outputRefCalls=1"
 
-
+rule glnexus:
+	
 
 
 # snakemake -s part2_wecall.snake -npF

@@ -14,19 +14,9 @@ for f in FILES:
 rule all:
 	input:
 		[
-			config["dest_dir_metrics"] + s + ".flagstat_cram" for s in d.keys()
-		] + [
-			config["dest_dir_metrics"] + s + ".verifyBamID.selfSM" for s in d.keys()
-		] + [
-			config["dest_dir_metrics"] + s + ".wgs_metrics.txt" for s in d.keys()
-		] + [
 			config["dest_dir_metrics"] + s + ".multiple_metrics.alignment_summary_metrics" for s in d.keys()
-		] + [
-			config["dest_dir_BAMs"] + s + ".clean.bam.bai" for s in d.keys()
 		]
-		# + [
-		# 	config["dest_dir_metrics"] + s + ".validate_output" for s in d.keys()
-		# ]
+
 
 
 
@@ -47,8 +37,6 @@ rule all:
 rule picard_SamToFastq:
 	input:
 		lambda wildcards: d[wildcards.sample]
-	log:
-		config["path_logs"] + "{sample}.SamToFastq.log"
 	benchmark:
 		config["path_benchmark"] + "{sample}.SamToFastq.benchmark.txt"
 	output:
@@ -63,8 +51,6 @@ rule realign:
 		fq1 = config["dest_dir_FASTQs"] + "{sample}.R1.fq.gz",
 		fq2 = config["dest_dir_FASTQs"] + "{sample}.R2.fq.gz",
 		ref = config["ref_fa"]
-	log:
-		config["path_logs"] + "{sample}.bwa.log"
 	benchmark:
 		config["path_benchmark"] + "{sample}.bwa.benchmark.txt"
 	output:
@@ -77,8 +63,6 @@ rule cram:
 	input:
 		sam = config["dest_dir_BAMs"] + "{sample}.sam",
 		ref = config["ref_fa"]
-	log:
-		config["path_logs"] + "{sample}.cram.log"
 	benchmark:
 		config["path_benchmark"] + "{sample}.cram.benchmark.txt"
 	output:
@@ -92,8 +76,6 @@ rule flagstats:
 		sam = config["dest_dir_BAMs"] + "{sample}.sam",
 		cram = config["dest_dir_BAMs"] + "{sample}.cram",
 		original_bam = lambda wildcards: d[wildcards.sample]
-	log:
-		config["path_logs"] + "{sample}.flagstat.log"
 	benchmark:
 		config["path_benchmark"] + "{sample}.flagstat.benchmark.txt"
 	output:
@@ -107,19 +89,20 @@ rule flagstats:
 
 
 rule sort_bam:
-	input: config["dest_dir_BAMs"] + "{sample}.sam"
-	log:
-		config["path_logs"] + "{sample}.sort_sam.log"
+	input:
+		sam = config["dest_dir_BAMs"] + "{sample}.sam",
+		flagstat = config["dest_dir_metrics"] + "{sample}.flagstat_original_bam"
 	benchmark:
 		config["path_benchmark"] + "{sample}.sort_sam.benchmark.txt"
-	output: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
-	shell: "java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=coordinate I={input} O={output}"
+	output:
+		config["dest_dir_BAMs"] + "{sample}.sorted.bam"
+	shell:
+		"java -Xmx2g -jar " + config["path_picard"] + " SortSam SO=coordinate I={input.sam} O={output}"
 
 
 rule mark_duplicates:
-	input: config["dest_dir_BAMs"] + "{sample}.sorted.bam"
-	log:
-		config["path_logs"] + "{sample}.mark_duplicates.log"
+	input:
+		config["dest_dir_BAMs"] + "{sample}.sorted.bam"
 	benchmark:
 		config["path_benchmark"] + "{sample}.mark_duplicates.benchmark.txt"
 	output:
@@ -132,16 +115,30 @@ rule mark_duplicates:
 		"M={output.metrics} "
 		"VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=false"
 
+rule add_RG:
+	input:
+		original_bam = lambda wildcards: d[wildcards.sample],
+		bam = config["dest_dir_BAMs"] + "{sample}.md.bam"
+	benchmark:
+		config["path_benchmark"] + "{sample}.AddOrReplaceReadGroups.benchmark.txt"
+	output:
+		config["dest_dir_BAMs"] + "{sample}.with_RG.bam"
+	shell:
+		"extra=$(samtools view -H {input.original_bam} | grep '^@RG' | sed -e 's/@RG//g' | sed -e 's/\\t/ RG/g' | sed -e 's/:/=/g') && "
+		"java -Xmx12g -jar " + config["path_picard"] + " AddOrReplaceReadGroups "
+		"I={input.bam} "
+		"O={output} "
+		"$extra"
+
 
 rule cleanSam:
 	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.md.bam",
+		bam = config["dest_dir_BAMs"] + "{sample}.with_RG.bam",
 		ref = config["ref_fa"]
-	log:
-		config["path_logs"] + "{sample}.CleanSam.log"
 	benchmark:
 		config["path_benchmark"] + "{sample}.CleanSam.benchmark.txt"
-	output: config["dest_dir_BAMs"] + "{sample}.clean.bam"
+	output:
+		config["dest_dir_BAMs"] + "{sample}.clean.bam"
 	shell:
 		"java -Xmx2g -jar " + config["path_picard"] + " CleanSam "
 		"I={input.bam} "
@@ -150,19 +147,20 @@ rule cleanSam:
 
 
 rule bam_index:
-	input: config["dest_dir_BAMs"] + "{sample}.clean.bam"
-	log:
-		config["path_logs"] + "{sample}.bam_index.log"
+	input:
+		config["dest_dir_BAMs"] + "{sample}.clean.bam"
 	benchmark:
 		config["path_benchmark"] + "{sample}.bam_index.benchmark.txt"
-	output: config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
-	shell: "samtools index {input}"
+	output:
+		config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
+	shell:
+		"samtools index {input}"
 
 
 # rule ValidateSamFile:
 # 	input:
 # 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-# 		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
+# 		ref = config["ref_fa"]
 # 	log:
 # 		config["path_logs"] + "{sample}.ValidateSamFile.log"
 # 	benchmark:
@@ -170,16 +168,17 @@ rule bam_index:
 # 	output: config["dest_dir_metrics"] + "{sample}.validate_output"
 # 	shell:
 # 		"java -Xmx2g -jar " + config["path_picard"] + " ValidateSamFile "
-# 		"I={input.bam} MODE=SUMMARY O={output} "
+# 		"I={input.bam} O={output} REFERENCE_SEQUENCE={input.ref}"
+
+# MODE=SUMMARY REFERENCE_SEQUENCE={input.ref} QUIET=true VALIDATION_STRINGENCY=SILENT VERBOSITY=null IGNORE_WARNINGS=true"
 
 
 # collect multiple metrics, verifyBamID...
 rule verifyBamID:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		vcf = config["vcf_ref_verifyBamID"]
-	log:
-		config["path_logs"] + "{sample}.verifyBamID.log"
+		vcf = config["vcf_ref_verifyBamID"],
+		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai"
 	benchmark:
 		config["path_benchmark"] + "{sample}.verifyBamID.benchmark.txt"
 	output:
@@ -200,8 +199,6 @@ rule verifyBamID:
 # 		ref = config["ref_fa"],
 # 		bait_intervals = config["path_bait_intervals"],
 # 		target_intervals = config["path_target_intervals"]
-# 	log:
-# 		config["path_logs"] + "{sample}.CollectHsMetrics.log"
 # 	benchmark:
 # 		config["path_benchmark"] + "{sample}.CollectHsMetrics.benchmark.txt"
 # 	output: config["dest_dir_metrics"] + "{sample}.hs_metrics.txt"
@@ -215,8 +212,6 @@ rule verifyBamID:
 # 	input:
 # 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
 # 		ref = config["ref_fa"]
-# 	log:
-# 		config["path_logs"] + "{sample}.CollectWgsMetrics.log"
 # 	benchmark:
 # 		config["path_benchmark"] + "{sample}.CollectWgsMetrics.benchmark.txt"
 # 	output: config["dest_dir_metrics"] + "{sample}.wgs_metrics.txt"
@@ -229,9 +224,8 @@ rule verifyBamID:
 rule CollectMultipleMetrics:
 	input:
 		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		ref = config["ref_fa"]
-	log:
-		config["path_logs"] + "{sample}.CollectMultipleMetrics.log"
+		ref = config["ref_fa"],
+		verifyBamID = config["dest_dir_metrics"] + "{sample}.verifyBamID.selfSM"
 	benchmark:
 		config["path_benchmark"] + "{sample}.CollectMultipleMetrics.benchmark.txt"
 	output:
@@ -247,7 +241,6 @@ rule CollectMultipleMetrics:
 		"METRIC_ACCUMULATION_LEVEL=READ_GROUP "
 		"METRIC_ACCUMULATION_LEVEL=SAMPLE "
 		"VALIDATION_STRINGENCY=SILENT "
-
 
 
 
