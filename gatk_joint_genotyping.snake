@@ -4,86 +4,49 @@ from os.path import *
 import glob
 
 
-FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
 
-d = {}
-for f in FILES:
-	d[basename(f)[:-4]] = f
 
 rule all:
 	input:
 		[
-			config["path_logs"] + s + ".gatk_gvcf_validation" for s in d.keys()
+			config["dest_dir_VCFs"] + "my_database_" + c for c in config["chromosomes"]
 		]
 
 
-
-rule BaseRecalibrator:
+rule Consolidate_GVCFs:
 	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
-		ref = config["ref_fa"]
+		gvcfs = glob.glob(config["dest_dir_VCFs"] + "*.gatk.g.vcf.gz")
+	params:
+		chrom = lambda wildcards: wildcards.chrom,
+		V_command = lambda wildcards, input: expand( "-V {f}", f = input.gvcfs )
 	benchmark:
-		config["path_benchmark"] + "{sample}.BaseRecalibrator.benchmark.txt"
+		config["path_benchmark"] + ".Consolidate_GVCFs_{chrom}.benchmark.txt"
 	output:
-		config["path_BQSR"] + "{sample}.recal_table"
+		config["dest_dir_VCFs"] + "my_database_{chrom}"
 	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' BaseRecalibrator -R {input.ref}  "
-		"-I {input.bam} "
-		"--known-sites " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
-		"--known-sites " + config["dir_bundle_GATK"] + "hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz "
-		"--known-sites " + config["dir_bundle_GATK"] + "hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz "
-		"-O {output}"
+		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' GenomicsDBImport "
+		"{params.V_command} "
+		# "-V " + " -V ".join( glob.glob(config["dest_dir_VCFs"] + "*.gatk.g.vcf.gz") ) + " "
+		"--genomicsdb-workspace-path {output} "
+		"-L {params.chrom}"
 
-rule PrintReads:
-	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
-		ref = config["ref_fa"],
-		recal_table = config["path_BQSR"] + "{sample}.recal_table"
-	benchmark:
-		config["path_benchmark"] + "{sample}.PrintReads.benchmark.txt"
-	output:
-		config["dest_dir_BAMs"] + "{sample}.recal.bam"
-	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' PrintReads -R {input.ref} -nct 16 "
-		"-I {input.bam} "
-		"-BSQR {input.recal_table} "
-		"-O {output}"
 
-rule HaplotypeCaller:
-	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.recal.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
-		ref = config["ref_fa"],
-		recal_table = config["path_BQSR"] + "{sample}.recal_table"
-	benchmark:
-		config["path_benchmark"] + "{sample}.HaplotypeCaller.benchmark.txt"
-	output:
-		config["dest_dir_VCFs"] + "{sample}.gatk.g.vcf.gz"
-	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' HaplotypeCaller -R {input.ref} "
-		"-I {input.bam} "
-		"--emitRefConfidence GVCF "
-		"--dbsnp " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
-		"-O {output} "
-		"-pairHMM VECTOR_LOGLESS_CACHING "
 
-rule ValidateVariants:
-	input:
-		gvcf = config["dest_dir_VCFs"] + "{sample}.gatk.g.vcf.gz",
-		ref = config["ref_fa"]
-	benchmark:
-		config["path_benchmark"] + "{sample}.gatk_gvcf_validation.benchmark.txt"
-	output:
-		config["path_logs"] + "{sample}.gatk_gvcf_validation"
-	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' ValidateVariants -R {input.ref} "
-		"-V {input.gvcf} "
-		"--validationTypeToExclude ALL > {output} "
+# rule ValidateVariants:
+# 	input:
+# 		gvcf = config["dest_dir_VCFs"] + "{sample}.gatk.g.vcf.gz",
+# 		ref = config["ref_fa"]
+# 	benchmark:
+# 		config["path_benchmark"] + "{sample}.gatk_gvcf_validation.benchmark.txt"
+# 	output:
+# 		config["path_logs"] + "{sample}.gatk_gvcf_validation"
+# 	shell:
+# 		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' ValidateVariants -R {input.ref} "
+# 		"-V {input.gvcf} "
+# 		"--validationTypeToExclude ALL > {output} "
 
 
 
 
-# snakemake -s gatk_gvcfs.snake -npF
+# snakemake -s gatk_joint_genotyping.snake -npF --cluster bsub --jobs 25
 

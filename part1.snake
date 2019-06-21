@@ -3,8 +3,11 @@ configfile: "config.yaml"
 from os.path import *
 import glob
 
-FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
-# FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037*.dupes_marked.bam", recursive = True)
+# FILES = glob.glob(config["input_dir"] + "DRG_037/DRG_037-F01/*.dupes_marked.bam", recursive = True) # 1 sample
+FILES = glob.glob(config["input_dir"] + "DRG_037/*/*.dupes_marked.bam", recursive = True) # 43 samples
+# FILES = glob.glob(config["input_dir"] + "DRG_*/*/*.dupes_marked.bam", recursive = True) # 2568 samples
+# FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037*.dupes_marked.bam", recursive = True) # 91 samples
+# FILES = glob.glob(config["input_dir"] + "DRG_*/**/DRG_*.dupes_marked.bam", recursive = True) # 7512 samples
 
 
 d = {}
