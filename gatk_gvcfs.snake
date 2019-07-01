@@ -4,11 +4,15 @@ from os.path import *
 import glob
 
 
-FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
+# FILES = glob.glob(config["input_dir"] + "DRG_037/DRG_037-F01/*.dupes_marked.bam", recursive = True) # 1 sample
+# FILES = glob.glob(config["input_dir"] + "DRG_037/*/*.dupes_marked.bam", recursive = True) # 43 samples
+FILES = glob.glob(config["dest_dir_BAMs"] + "*.clean.bam", recursive = True) # 43 samples
+
+
 
 d = {}
 for f in FILES:
-	d[basename(f)[:-4]] = f
+	d[basename(f)[:-10]] = f
 
 rule all:
 	input:
@@ -28,7 +32,7 @@ rule BaseRecalibrator:
 	output:
 		config["path_BQSR"] + "{sample}.recal_table"
 	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' BaseRecalibrator -R {input.ref}  "
+		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' BaseRecalibrator -R {input.ref} "
 		"-I {input.bam} "
 		"--known-sites " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
 		"--known-sites " + config["dir_bundle_GATK"] + "hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz "

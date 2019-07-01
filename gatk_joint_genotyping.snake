@@ -9,7 +9,8 @@ import glob
 rule all:
 	input:
 		[
-			config["dest_dir_VCFs"] + "my_database_" + c for c in config["chromosomes"]
+			# config["dest_dir_VCFs"] + "my_database_" + c for c in config["chromosomes"]
+			config["dest_dir_VCFs"] + "joint_" + c + ".vcf" for c in config["chromosomes"]
 		]
 
 
@@ -24,12 +25,47 @@ rule Consolidate_GVCFs:
 	output:
 		config["dest_dir_VCFs"] + "my_database_{chrom}"
 	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' GenomicsDBImport "
+		"gatk --java-options '-Xmx32G -Djava.io.tmpdir=/tmp' GenomicsDBImport "
 		"{params.V_command} "
 		# "-V " + " -V ".join( glob.glob(config["dest_dir_VCFs"] + "*.gatk.g.vcf.gz") ) + " "
 		"--genomicsdb-workspace-path {output} "
 		"-L {params.chrom}"
 
+
+rule GenotypeGVCFs:
+	input:
+		database = config["dest_dir_VCFs"] + "my_database_{chrom}",
+		ref = config["ref_fa"]
+	benchmark:
+		config["path_benchmark"] + ".GenotypeGVCFs_{chrom}.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "joint_{chrom}_gatk.vcf"
+	shell:
+		"gatk --java-options '-Xmx32G -Djava.io.tmpdir=/tmp' GenotypeGVCFs "
+		"-R {input.ref} "
+		"-V {input.database} "
+		"-newQual "
+		"--dbsnp " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
+		"-O {output} "
+
+
+# 	time(java -Xmx32g -Djava.io.tmpdir=/tmp \
+# 		-jar $path_GATK \
+# 		-T GenotypeGVCFs \
+# 		-R $path_ref \
+# 		--dbsnp $bundle2_8/b37/dbsnp_138.b37.vcf \
+# 		${gvcf_array[@]} \
+# 		-L $chr \
+# 		-newQual \
+# 		--disable_auto_index_creation_and_locking_when_reading_rods \
+# 		-o $root_folder/output_gatk/joint_chr$chr.vcf )
+
+
+# gatk GenotypeGVCFs \
+#     -R data/ref/ref.fasta \
+#     -V gendb://my_database \
+#     -newQual \
+#     -O test_output.vcf 
 
 
 # rule ValidateVariants:
@@ -48,5 +84,5 @@ rule Consolidate_GVCFs:
 
 
 
-# snakemake -s gatk_joint_genotyping.snake -npF --cluster bsub --jobs 25
+# snakemake -s gatk_joint_genotyping.snake -np
 

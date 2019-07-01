@@ -4,86 +4,32 @@ from os.path import *
 import glob
 
 
-FILES = glob.glob(config["input_dir"] + "DRG_037/**/DRG_037-F01_LIBx1_FINAL_b37_PE.aln.RG.dupes_marked.bam", recursive = True)
 
-d = {}
-for f in FILES:
-	d[basename(f)[:-4]] = f
 
 rule all:
 	input:
-		[
-			config["path_logs"] + s + ".gatk_gvcf_validation" for s in d.keys()
-		]
+		config["dest_dir_VCFs"] + "joint_gatk.vcf"
 
 
+# java -jar /apps/picard-tools/2.8.2/picard-2.8.2.jar GatherVcfs --help
+# java -jar /apps/picard-tools/2.8.2/picard-2.8.2.jar MergeVcfs --help
 
-rule BaseRecalibrator:
+rule GatherVcfs:
 	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
-		ref = config["ref_fa"]
+		vcfs = glob.glob(config["dest_dir_VCFs"] + "joint_*_gatk.vcf")
+	params:
+		I_command = lambda wildcards, input: expand( "INPUT={f}", f = input.vcfs )
 	benchmark:
-		config["path_benchmark"] + "{sample}.BaseRecalibrator.benchmark.txt"
+		config["path_benchmark"] + ".GatherVcfs.benchmark.txt"
 	output:
-		config["path_BQSR"] + "{sample}.recal_table"
+		config["dest_dir_VCFs"] + "joint_gatk.vcf"
 	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' BaseRecalibrator -R {input.ref}  "
-		"-I {input.bam} "
-		"--known-sites " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
-		"--known-sites " + config["dir_bundle_GATK"] + "hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz "
-		"--known-sites " + config["dir_bundle_GATK"] + "hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz "
-		"-O {output}"
-
-rule PrintReads:
-	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.clean.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
-		ref = config["ref_fa"],
-		recal_table = config["path_BQSR"] + "{sample}.recal_table"
-	benchmark:
-		config["path_benchmark"] + "{sample}.PrintReads.benchmark.txt"
-	output:
-		config["dest_dir_BAMs"] + "{sample}.recal.bam"
-	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' PrintReads -R {input.ref} -nct 16 "
-		"-I {input.bam} "
-		"-BSQR {input.recal_table} "
-		"-O {output}"
-
-rule HaplotypeCaller:
-	input:
-		bam = config["dest_dir_BAMs"] + "{sample}.recal.bam",
-		index = config["dest_dir_BAMs"] + "{sample}.clean.bam.bai",
-		ref = config["ref_fa"],
-		recal_table = config["path_BQSR"] + "{sample}.recal_table"
-	benchmark:
-		config["path_benchmark"] + "{sample}.HaplotypeCaller.benchmark.txt"
-	output:
-		config["dest_dir_VCFs"] + "{sample}.gatk.g.vcf.gz"
-	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' HaplotypeCaller -R {input.ref} "
-		"-I {input.bam} "
-		"--emitRefConfidence GVCF "
-		"--dbsnp " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
-		"-O {output} "
-		"-pairHMM VECTOR_LOGLESS_CACHING "
-
-rule ValidateVariants:
-	input:
-		gvcf = config["dest_dir_VCFs"] + "{sample}.gatk.g.vcf.gz",
-		ref = config["ref_fa"]
-	benchmark:
-		config["path_benchmark"] + "{sample}.gatk_gvcf_validation.benchmark.txt"
-	output:
-		config["path_logs"] + "{sample}.gatk_gvcf_validation"
-	shell:
-		"gatk --java-options '-Xmx12G -Djava.io.tmpdir=/tmp' ValidateVariants -R {input.ref} "
-		"-V {input.gvcf} "
-		"--validationTypeToExclude ALL > {output} "
+		"java -Xmx2g -jar " + config["path_picard"] + " GatherVcfs "
+		"{params.I_command} "
+		"O={output} "
 
 
 
 
-# snakemake -s gatk_gvcfs.snake -npF
+# snakemake -s gatk_VQSR.snake -np
 
