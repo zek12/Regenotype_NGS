@@ -89,5 +89,5 @@ rule ValidateVariants:
 
 
 
-# snakemake -s gatk_gvcfs.snake -npF
+# snakemake -s gatk_gvcfs.snake -np
 

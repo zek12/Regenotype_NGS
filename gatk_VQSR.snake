@@ -29,6 +29,21 @@ rule GatherVcfs:
 		"O={output} "
 
 
+# rule VariantRecalibrator_snps:
+
+# rule ApplyRecalibration_snps:
+
+
+# rule VariantRecalibrator_indels:
+
+# rule ApplyRecalibration_indels:
+
+# rule CalculateGenotypePosteriors:
+
+# rule LeftAlignAndTrimVariants:
+
+
+
 
 
 # snakemake -s gatk_VQSR.snake -np

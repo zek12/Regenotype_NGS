@@ -10,20 +10,20 @@ rule all:
 	input:
 		[
 			# config["dest_dir_VCFs"] + "my_database_" + c for c in config["chromosomes"]
-			config["dest_dir_VCFs"] + "joint_" + c + ".vcf" for c in config["chromosomes"]
+			config["dest_dir_VCFs"] + "joint_" + c + "_gatk.vcf" for c in config["chromosomes"]
 		]
 
 
 rule Consolidate_GVCFs:
 	input:
-		gvcfs = glob.glob(config["dest_dir_VCFs"] + "*.gatk.g.vcf.gz")
+		gvcfs = sorted(glob.glob(config["dest_dir_VCFs"] + "*.gatk.g.vcf.gz"))
 	params:
 		chrom = lambda wildcards: wildcards.chrom,
 		V_command = lambda wildcards, input: expand( "-V {f}", f = input.gvcfs )
 	benchmark:
 		config["path_benchmark"] + ".Consolidate_GVCFs_{chrom}.benchmark.txt"
 	output:
-		config["dest_dir_VCFs"] + "my_database_{chrom}"
+		directory(config["dest_dir_VCFs"] + "my_database_{chrom}")
 	shell:
 		"gatk --java-options '-Xmx32G -Djava.io.tmpdir=/tmp' GenomicsDBImport "
 		"{params.V_command} "
@@ -43,22 +43,11 @@ rule GenotypeGVCFs:
 	shell:
 		"gatk --java-options '-Xmx32G -Djava.io.tmpdir=/tmp' GenotypeGVCFs "
 		"-R {input.ref} "
-		"-V {input.database} "
-		"-newQual "
+		"-V gendb://{input.database} "
+		"-new-qual true "
 		"--dbsnp " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
 		"-O {output} "
 
-
-# 	time(java -Xmx32g -Djava.io.tmpdir=/tmp \
-# 		-jar $path_GATK \
-# 		-T GenotypeGVCFs \
-# 		-R $path_ref \
-# 		--dbsnp $bundle2_8/b37/dbsnp_138.b37.vcf \
-# 		${gvcf_array[@]} \
-# 		-L $chr \
-# 		-newQual \
-# 		--disable_auto_index_creation_and_locking_when_reading_rods \
-# 		-o $root_folder/output_gatk/joint_chr$chr.vcf )
 
 
 # gatk GenotypeGVCFs \
