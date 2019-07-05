@@ -178,7 +178,7 @@ rule LeftAlignAndTrimVariants:
 		"-R {input.ref} "
 		"-V {input.vcf} "
 		"-O {output} "
-		"--splitMultiallelics "
+		"--split-multi-allelics true "
 
 
 
