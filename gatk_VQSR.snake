@@ -8,7 +8,11 @@ import glob
 
 rule all:
 	input:
-		config["dest_dir_VCFs"] + "joint_gatk.vcf"
+		# config["dest_dir_VCFs"] + "joint_gatk.sorted.vcf"
+		# config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.vcf"
+		config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.postCGP.aln_trim_split.vcf"
+		
+		
 
 
 # java -jar /apps/picard-tools/2.8.2/picard-2.8.2.jar GatherVcfs --help
@@ -16,11 +20,11 @@ rule all:
 
 rule GatherVcfs:
 	input:
-		vcfs = glob.glob(config["dest_dir_VCFs"] + "joint_*_gatk.vcf")
+		vcfs = sorted(glob.glob(config["dest_dir_VCFs"] + "joint_*_gatk.vcf"))
 	params:
 		I_command = lambda wildcards, input: expand( "INPUT={f}", f = input.vcfs )
 	benchmark:
-		config["path_benchmark"] + ".GatherVcfs.benchmark.txt"
+		config["path_benchmark"] + "GatherVcfs.benchmark.txt"
 	output:
 		config["dest_dir_VCFs"] + "joint_gatk.vcf"
 	shell:
@@ -29,18 +33,154 @@ rule GatherVcfs:
 		"O={output} "
 
 
-# rule VariantRecalibrator_snps:
+# sort VCF by position
+rule sort:
+	input:
+		config["dest_dir_VCFs"] + "joint_gatk.vcf"
+	benchmark:
+		config["path_benchmark"] + "sort.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "joint_gatk.sorted.vcf"
+	shell:
+		"vcf-sort {input} > {output} "
 
-# rule ApplyRecalibration_snps:
+
+rule VariantRecalibrator_snps:
+	input:
+		vcf = config["dest_dir_VCFs"] + "joint_gatk.sorted.vcf",
+		ref = config["ref_fa"]
+	benchmark:
+		config["path_benchmark"] + "VariantRecalibrator_snps.benchmark.txt"
+	output:
+		recal_table = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_table_snps",
+		recal_tranches = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_tranches_snps",
+		recal_script = config["dest_dir_VCFs"] + "VQSR/VQSR_recalibrate_SNP_plots.R"
+	shell:
+		"gatk --java-options '-Xmx15G -Djava.io.tmpdir=/tmp' VariantRecalibrator "
+		"-R {input.ref} "
+		"-V {input.vcf} "
+		"-O {output.recal_table} "
+		"--tranches-file {output.recal_tranches} "
+		"-resource:hapmap,known=false,training=true,truth=true,prior=15.0 " + config["dir_bundle_GATK"] + "hg38/hapmap_3.3.hg38.vcf.gz "
+		"-resource:omni,known=false,training=true,truth=true,prior=12.0 " + config["dir_bundle_GATK"] + "hg38/1000G_omni2.5.hg38.vcf.gz "
+		"-resource:1000G,known=false,training=true,truth=false,prior=10.0 " + config["dir_bundle_GATK"] + "hg38/1000G_phase1.snps.high_confidence.hg38.vcf.gz "
+		"-resource:dbsnp,known=true,training=false,truth=false,prior=2.0 " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
+		"-an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR -an DP -an InbreedingCoeff "
+		"--rscript-file {output.recal_script} "
+		"-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 "
+		"-mode SNP"
 
 
-# rule VariantRecalibrator_indels:
 
-# rule ApplyRecalibration_indels:
+rule ApplyVQSR_snps:
+	input:
+		vcf = config["dest_dir_VCFs"] + "joint_gatk.sorted.vcf",
+		ref = config["ref_fa"],
+		recal_table = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_table_snps",
+		recal_tranches = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_tranches_snps"
+	benchmark:
+		config["path_benchmark"] + "ApplyVQSR_snps.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.vcf"
+	shell:
+		"gatk --java-options '-Xmx15G -Djava.io.tmpdir=/tmp' ApplyVQSR "
+		"-R {input.ref} "
+		"-V {input.vcf} "
+		"-O {output} "
+		"-ts-filter-level 99.9 "
+		"--tranches-file {input.recal_tranches} "
+		"--recal-file {input.recal_table} "
+		"-mode SNP "
 
-# rule CalculateGenotypePosteriors:
 
-# rule LeftAlignAndTrimVariants:
+# "--exclude-filtered true "
+
+rule VariantRecalibrator_indels:
+	input:
+		vcf = config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.vcf",
+		ref = config["ref_fa"]
+	benchmark:
+		config["path_benchmark"] + "VariantRecalibrator_indels.benchmark.txt"
+	output:
+		recal_table = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_table_indels",
+		recal_tranches = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_tranches_indels",
+		recal_script = config["dest_dir_VCFs"] + "VQSR/VQSR_recalibrate_indels_plots.R"
+	shell:
+		"gatk --java-options '-Xmx15G -Djava.io.tmpdir=/tmp' VariantRecalibrator "
+		"-R {input.ref} "
+		"-V {input.vcf} "
+		"-O {output.recal_table} "
+		"--tranches-file {output.recal_tranches} "
+		"-resource:mills,known=false,training=true,truth=true,prior=12.0 " + config["dir_bundle_GATK"] + "hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz "
+		"-resource:dbsnp,known=true,training=false,truth=false,prior=2.0 " + config["dir_bundle_GATK"] + "hg38/dbsnp_146.hg38.vcf.gz "
+		"-an QD -an DP -an FS -an SOR -an ReadPosRankSum -an MQRankSum -an InbreedingCoeff "
+		"-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 "
+		"--max-gaussians 4 "
+		"--rscript-file {output.recal_script} "
+		"-mode INDEL"
+
+
+
+
+rule ApplyVQSR_indels:
+	input:
+		vcf = config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.vcf",
+		ref = config["ref_fa"],
+		recal_table = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_table_indels",
+		recal_tranches = config["dest_dir_VCFs"] + "VQSR/VQSR_recal_tranches_indels"
+	benchmark:
+		config["path_benchmark"] + "ApplyVQSR_indels.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.vcf"
+	shell:
+		"gatk --java-options '-Xmx15G -Djava.io.tmpdir=/tmp' ApplyVQSR "
+		"-R {input.ref} "
+		"-V {input.vcf} "
+		"-O {output} "
+		"-ts-filter-level 99.9 "
+		"--tranches-file {input.recal_tranches} "
+		"--recal-file {input.recal_table} "
+		"-mode INDEL "
+
+# "--exclude-filtered true "
+
+
+
+
+
+rule CalculateGenotypePosteriors:
+	input:
+		vcf = config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.vcf",
+		ref = config["ref_fa"]
+	benchmark:
+		config["path_benchmark"] + "CalculateGenotypePosteriors.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.postCGP.vcf"
+	shell:
+		"gatk --java-options '-Xmx15G -Djava.io.tmpdir=/tmp' CalculateGenotypePosteriors "
+		"-R {input.ref} "
+		"-V {input.vcf} "
+		"-O {output} "
+		"--supporting " + config["dir_bundle_GATK"] + "hg38/1000G.phase3.integrated.sites_only.no_MATCHED_REV.hg38.new.vcf "
+
+
+
+rule LeftAlignAndTrimVariants:
+	input:
+		vcf = config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.postCGP.vcf",
+		ref = config["ref_fa"]
+	benchmark:
+		config["path_benchmark"] + "LeftAlignAndTrimVariants.benchmark.txt"
+	output:
+		config["dest_dir_VCFs"] + "joint_gatk.sorted.VQSR_snp.VQSR_indels.postCGP.aln_trim_split.vcf"
+	shell:
+		"gatk --java-options '-Xmx15G -Djava.io.tmpdir=/tmp' LeftAlignAndTrimVariants "
+		"-R {input.ref} "
+		"-V {input.vcf} "
+		"-O {output} "
+		"--splitMultiallelics "
+
+
 
 
 

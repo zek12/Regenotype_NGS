@@ -21,7 +21,7 @@ rule Consolidate_GVCFs:
 		chrom = lambda wildcards: wildcards.chrom,
 		V_command = lambda wildcards, input: expand( "-V {f}", f = input.gvcfs )
 	benchmark:
-		config["path_benchmark"] + ".Consolidate_GVCFs_{chrom}.benchmark.txt"
+		config["path_benchmark"] + "Consolidate_GVCFs_{chrom}.benchmark.txt"
 	output:
 		directory(config["dest_dir_VCFs"] + "my_database_{chrom}")
 	shell:
@@ -37,7 +37,7 @@ rule GenotypeGVCFs:
 		database = config["dest_dir_VCFs"] + "my_database_{chrom}",
 		ref = config["ref_fa"]
 	benchmark:
-		config["path_benchmark"] + ".GenotypeGVCFs_{chrom}.benchmark.txt"
+		config["path_benchmark"] + "GenotypeGVCFs_{chrom}.benchmark.txt"
 	output:
 		config["dest_dir_VCFs"] + "joint_{chrom}_gatk.vcf"
 	shell:
